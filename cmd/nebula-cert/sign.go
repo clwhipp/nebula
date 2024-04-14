@@ -29,6 +29,7 @@ type signFlags struct {
 	outQRPath   *string
 	groups      *string
 	subnets     *string
+	caKeyPass   *string
 }
 
 func newSignFlags() *signFlags {
@@ -45,6 +46,7 @@ func newSignFlags() *signFlags {
 	sf.outQRPath = sf.set.String("out-qr", "", "Optional: output a qr code image (png) of the certificate")
 	sf.groups = sf.set.String("groups", "", "Optional: comma separated list of groups")
 	sf.subnets = sf.set.String("subnets", "", "Optional: comma separated list of ipv4 address and network in CIDR notation. Subnets this cert can serve for")
+	sf.caKeyPass = sf.set.String("ca-key-pass", "", "Optional: Password to use for decrypting ca-key when provided.")
 	return &sf
 
 }
@@ -85,18 +87,23 @@ func signCert(args []string, out io.Writer, errOut io.Writer, pr PasswordReader)
 	if err == cert.ErrPrivateKeyEncrypted {
 		// ask for a passphrase until we get one
 		var passphrase []byte
-		for i := 0; i < 5; i++ {
-			out.Write([]byte("Enter passphrase: "))
-			passphrase, err = pr.ReadPassword()
+		var caKeyPassBytes []byte = []byte(*sf.caKeyPass)
+		if len(caKeyPassBytes) > 0 {
+			passphrase = caKeyPassBytes
+		} else {
+			for i := 0; i < 5; i++ {
+				out.Write([]byte("Enter passphrase: "))
+				passphrase, err = pr.ReadPassword()
 
-			if err == ErrNoTerminal {
-				return fmt.Errorf("ca-key is encrypted and must be decrypted interactively")
-			} else if err != nil {
-				return fmt.Errorf("error reading password: %s", err)
-			}
+				if err == ErrNoTerminal {
+					return fmt.Errorf("ca-key is encrypted and must be decrypted interactively")
+				} else if err != nil {
+					return fmt.Errorf("error reading password: %s", err)
+				}
 
-			if len(passphrase) > 0 {
-				break
+				if len(passphrase) > 0 {
+					break
+				}
 			}
 		}
 		if len(passphrase) == 0 {
